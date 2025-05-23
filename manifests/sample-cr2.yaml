@@ -1,0 +1,6 @@
+apiVersion: myk8s.io/v1
+kind: Sample
+metadata:
+  name: sample-cr2
+spec:
+  message: "Another CR"
