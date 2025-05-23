@@ -1,86 +1,82 @@
 # Custom Kubernetes Controller
 
-A simple Kubernetes controller that watches custom resources and processes them through a workqueue.
+A Kubernetes controller that watches custom resources and processes them through a workqueue with structured logging.
+
+## Project Structure
+
+```
+.
+├── cmd/controller/    # Entry point
+├── pkg/
+│   ├── config/        # Kubeconfig setup
+│   ├── controller/    # Controller logic
+│   └── handlers/      # Event handlers
+└── manifests/         # CRDs and sample resources
+```
 
 ## What it does
 
 This controller:
 - Watches for changes to custom resources in the `myk8s.io/v1` API group
-- Uses informers to track resource changes
-- Processes resources through a workqueue
-- Logs resource events (add/update/delete)
-- Handles resource events with multiple workers
+- Uses informers to track resource changes and maintain cache
+- Processes resources through a rate-limited workqueue
+- Handles resource events with multiple worker goroutines
+- Provides structured logging of operations
 
 ## Prerequisites
 
 - Go 1.16+
 - Access to a Kubernetes cluster (minikube, kind, or remote)
 - kubectl configured
-- Custom Resource Definition installed:
 
-```yaml
-apiVersion: apiextensions.k8s.io/v1
-kind: CustomResourceDefinition
-metadata:
-  name: samples.myk8s.io
-spec:
-  group: myk8s.io
-  versions:
-    - name: v1
-      served: true
-      storage: true
-      schema:
-        openAPIV3Schema:
-          type: object
-          properties:
-            spec:
-              type: object
-              properties:
-                size:
-                  type: integer
-  scope: Namespaced
-  names:
-    plural: samples
-    singular: sample
-    kind: Sample
-    shortNames:
-    - sam
-```
-
-## Running the Controller
+## Setup and Running
 
 ```bash
+# Install the CRD
+kubectl apply -f manifests/crd.yaml
+
 # Build the controller
-go build -o controller
+go build -o controller cmd/controller/main.go
 
 # Run the controller
 ./controller
 ```
 
-## Example Usage
+## Creating Sample Resources
+
+Sample CR manifests are provided in the `manifests/` directory:
 
 ```bash
-# Create a sample resource
-kubectl apply -f - <<EOF
-apiVersion: myk8s.io/v1
-kind: Sample
-metadata:
-  name: example-sample
-spec:
-  size: 3
-EOF
+# Create sample resources
+kubectl apply -f manifests/sample-cr.yaml
+kubectl apply -f manifests/sample-cr2.yaml
 
-# Create another sample
-kubectl apply -f - <<EOF
-apiVersion: myk8s.io/v1
-kind: Sample
-metadata:
-  name: second-sample
-spec:
-  size: 5
-EOF
+# List samples
+kubectl get samples
 
-# Watch the controller logs to see the events being processed
+# Delete samples
+kubectl delete -f manifests/sample-cr.yaml
 ```
 
-The controller will detect resource events and process them through the workqueue. Check the logs to see the resources being tracked.
+## Controller Events Flow
+
+1. Informer detects resource changes
+2. Event handlers add resource keys to the workqueue
+3. Worker goroutines process items from the queue
+4. Operations are logged with context information
+
+## Future Development
+
+This controller currently implements the core event detection and queueing patterns, but doesn't yet include reconciliation logic. Future enhancements will include:
+
+- Reconciliation loop implementation
+- Status updates for resources
+- Creation and management of dependent resources
+- Custom business logic based on resource specifications
+
+## Logs
+
+The controller uses structured logging with prefixes to indicate the source:
+- `EVENT:` - Resource events detected by informers
+- `QUEUE:` - Workqueue operations
+- `WORKER:` - Worker processing
